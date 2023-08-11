@@ -299,5 +299,3 @@ msm_drm-$(CONFIG_DRM_MSM) += msm_atomic.o \
 			     msm_prop.o \
 			     leds_ktz8866.o
 
-CDEFINES += -DBUILD_TIMESTAMP=\"$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')\"
-
