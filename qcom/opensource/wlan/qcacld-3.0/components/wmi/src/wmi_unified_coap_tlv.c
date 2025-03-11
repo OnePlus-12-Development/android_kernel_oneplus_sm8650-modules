@@ -19,7 +19,7 @@
  */
 
 #include <wmi_unified_priv.h>
-#include "wmi.h"
+#include "api/fw/wmi.h"
 #include "ol_defines.h"
 
 /*

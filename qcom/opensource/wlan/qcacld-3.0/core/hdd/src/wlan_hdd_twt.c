@@ -24,7 +24,7 @@
  *
  */
 
-#include "wmi.h"
+#include "api/fw/wmi.h"
 #include "wmi_unified_priv.h"
 #include "wmi_unified_twt_param.h"
 #include "wlan_hdd_twt.h"

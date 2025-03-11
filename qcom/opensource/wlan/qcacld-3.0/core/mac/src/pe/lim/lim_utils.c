@@ -3804,6 +3804,12 @@ static void lim_ht_switch_chnl_req(struct pe_session *session)
 		return;
 	}
 
+	if (mac->lim.stop_roaming_callback)
+		mac->lim.stop_roaming_callback(MAC_HANDLE(mac),
+					       session->smeSessionId,
+					       REASON_VDEV_RESTART_FROM_HOST,
+					       RSO_CHANNEL_SWITCH);
+
 	session->channelChangeReasonCode =
 			LIM_SWITCH_CHANNEL_HT_WIDTH;
 	mlme_set_chan_switch_in_progress(session->vdev, true);
@@ -8478,7 +8484,7 @@ static void lim_populate_eht_160_mcs_set(struct mac_context *mac_ctx,
 			fw_5g_eht_cap->bw_160_tx_max_nss_for_mcs_10_and_11);
 	rates->bw_160_rx_max_nss_for_mcs_10_and_11 =
 		QDF_MIN(peer_eht_caps->bw_160_rx_max_nss_for_mcs_10_and_11,
-			fw_5g_eht_cap->bw_160_rx_max_nss_for_mcs_10_and_11);
+			fw_5g_eht_cap->bw_160_tx_max_nss_for_mcs_10_and_11);
 	rates->bw_160_tx_max_nss_for_mcs_0_to_9 =
 		QDF_MIN(peer_eht_caps->bw_160_tx_max_nss_for_mcs_0_to_9,
 			fw_5g_eht_cap->bw_160_tx_max_nss_for_mcs_0_to_9);
@@ -8563,8 +8569,6 @@ QDF_STATUS lim_populate_eht_mcs_set(struct mac_context *mac_ctx,
 		pe_debug("session not eht capable");
 		return QDF_STATUS_SUCCESS;
 	}
-
-	pe_debug("bw is %d", ch_width);
 
 	switch (ch_width) {
 	case CH_WIDTH_320MHZ:
@@ -11062,7 +11066,6 @@ void lim_overwrite_sta_puncture(struct pe_session *session,
 	ch_param->reg_punc_bitmap = new_punc;
 	session->puncture_bitmap = new_punc;
 }
-
 #else
 static void lim_update_ap_puncture(struct pe_session *session,
 				   struct ch_params *ch_params)
@@ -11110,7 +11113,8 @@ QDF_STATUS lim_pre_vdev_start(struct mac_context *mac,
 				       session->curr_op_freq,
 				       wlan_vdev_get_id(session->vdev));
 
-	if (IS_DOT11_MODE_EHT(session->dot11mode))
+	if (IS_DOT11_MODE_EHT(session->dot11mode) &&
+	    !(LIM_IS_STA_ROLE(session) && !lim_get_punc_chan_bit_map(session)))
 		wlan_reg_set_create_punc_bitmap(&ch_params, true);
 
 	wlan_reg_set_channel_params_for_pwrmode(mac->pdev,

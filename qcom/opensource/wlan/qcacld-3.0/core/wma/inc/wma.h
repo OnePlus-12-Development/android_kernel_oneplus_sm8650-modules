@@ -46,7 +46,7 @@
 #include <wlan_policy_mgr_api.h>
 #include "wma_api.h"
 #include "wmi_unified_param.h"
-#include "wmi.h"
+#include "api/fw/wmi.h"
 #include "wlan_cm_roam_public_struct.h"
 #include "target_if.h"
 #include <qdf_hang_event_notifier.h>

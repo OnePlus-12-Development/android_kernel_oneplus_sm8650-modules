@@ -17,7 +17,7 @@
 #include "wmi_unified.h"
 #include "wmi_unified_param.h"
 #include <wmi_unified_priv.h>
-#include <wmi.h>
+#include "api/fw/wmi.h"
 #include "wmi_unified_ll_sap_tlv.h"
 
 static WMI_AUDIO_TRANSPORT_SWITCH_RESPONSE_STATUS

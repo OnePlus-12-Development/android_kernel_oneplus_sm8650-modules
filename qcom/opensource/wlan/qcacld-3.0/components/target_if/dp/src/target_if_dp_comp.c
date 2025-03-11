@@ -21,7 +21,7 @@
 #include "target_if_dp_comp.h"
 #include "target_if.h"
 #include "qdf_status.h"
-#include "wmi.h"
+#include "api/fw/wmi.h"
 #include "wmi_unified_api.h"
 #include "wmi_unified_priv.h"
 #include "wmi_unified_param.h"

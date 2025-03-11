@@ -59,7 +59,7 @@ target_if_twt_session_params_register_evt_hdlr(struct wlan_objmgr_psoc *psoc)
 }
 #elif defined(WLAN_SUPPORT_TWT) && !defined(WLAN_TWT_CONV_SUPPORTED)
 
-#include <wmi.h>
+#include "api/fw/wmi.h"
 #include <wlan_cp_stats_mc_ucfg_api.h>
 
 /**
