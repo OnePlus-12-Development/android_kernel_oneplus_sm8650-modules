@@ -1,5 +1,5 @@
 ifeq ($(call is-board-platform-in-list,pineapple cliffs volcano),true)
-LOCAL_MODULE_DDK_BUILD := true
+#LOCAL_MODULE_DDK_BUILD := true
 
 LOCAL_MODULE_DDK_SUBTARGET_REGEX := "$(TARGET_BOARD_PLATFORM)_audio.*"
 
