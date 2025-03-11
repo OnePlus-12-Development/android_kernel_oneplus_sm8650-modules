@@ -18,7 +18,7 @@
  */
 
 #include <osdep.h>
-#include "api/fw/wmi.h"
+#include <wmi.h>
 #include <wmi_unified_priv.h>
 #include <wmi_unified_concurrency_api.h>
 #ifdef WLAN_FEATURE_MCC_QUOTA

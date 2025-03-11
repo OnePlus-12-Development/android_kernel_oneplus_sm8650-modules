@@ -22,7 +22,7 @@
 #include <wmi_unified_priv.h>
 #include <wmi_unified_roam_api.h>
 #include <wmi_unified_roam_param.h>
-#include "api/fw/wmi.h"
+#include <wmi.h>
 #include "wlan_roam_debug.h"
 #include "ol_defines.h"
 #include "wlan_cm_roam_api.h"

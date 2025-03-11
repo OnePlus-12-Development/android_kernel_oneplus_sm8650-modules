@@ -26,7 +26,7 @@
 
 #include <qdf_types.h>
 #include <target_if.h>
-#include "api/fw/wmi.h"
+#include <wmi.h>
 #include <osdep.h>
 
 #define MGMT_RX_REO_INVALID_SNAPSHOT_VERSION      (-1)

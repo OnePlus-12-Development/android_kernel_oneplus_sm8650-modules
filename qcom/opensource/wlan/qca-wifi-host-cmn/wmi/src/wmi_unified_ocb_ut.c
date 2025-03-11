@@ -18,7 +18,7 @@
  */
 
 #include "wmi_unified_api.h"
-#include "api/fw/wmi.h"
+#include <wmi.h>
 #include "wmi_version.h"
 #include "wmi_unified_priv.h"
 #include <wlan_defs.h>

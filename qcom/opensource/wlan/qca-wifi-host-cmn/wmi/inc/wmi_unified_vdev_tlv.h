@@ -24,7 +24,7 @@
 #ifndef __WMI_UNIFIED_VDEV_TLV_H__
 #define __WMI_UNIFIED_VDEV_TLV_H__
 
-#include "api/fw/wmi.h"
+#include <wmi.h>
 #include <wmi_unified_priv.h>
 #include "wmi_unified.h"
 

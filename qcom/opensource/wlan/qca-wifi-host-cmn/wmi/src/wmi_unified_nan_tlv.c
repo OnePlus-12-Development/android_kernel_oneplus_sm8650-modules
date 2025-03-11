@@ -18,7 +18,7 @@
  */
 
 #include <osdep.h>
-#include "api/fw/wmi.h"
+#include <wmi.h>
 #include <wmi_unified_priv.h>
 #include <nan_public_structs.h>
 #include <wmi_unified_nan_api.h>

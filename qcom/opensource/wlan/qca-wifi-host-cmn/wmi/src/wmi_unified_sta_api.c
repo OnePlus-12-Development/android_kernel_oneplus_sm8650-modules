@@ -19,7 +19,7 @@
 /**
  * DOC: Implement API's specific to STA component.
  */
-#include "api/fw/wmi.h"
+#include <wmi.h>
 #include "wmi_unified_priv.h"
 #include "wmi_unified_sta_api.h"
 

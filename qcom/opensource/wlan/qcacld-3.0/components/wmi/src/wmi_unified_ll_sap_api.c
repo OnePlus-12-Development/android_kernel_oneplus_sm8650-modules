@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "api/fw/wmi.h"
+#include <wmi.h>
 #include <wmi_unified_priv.h>
 #include "wmi_unified_ll_sap_api.h"
 #include "wmi_unified_param.h"

@@ -20,7 +20,7 @@
  */
 
 #include <wmi_unified_priv.h>
-#include "api/fw/wmi.h"
+#include <wmi.h>
 #include "wlan_mlme_api.h"
 #include "wmi_unified_ll_sap_tlv.h"
 

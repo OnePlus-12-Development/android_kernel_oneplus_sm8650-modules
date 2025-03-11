@@ -16,7 +16,7 @@
  */
 
 #include <osdep.h>
-#include "api/fw/wmi.h"
+#include <wmi.h>
 #include <wmi_unified_priv.h>
 #include <wmi_unified_roam_param.h>
 #include <wmi_unified_roam_api.h>
