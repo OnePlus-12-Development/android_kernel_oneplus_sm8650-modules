@@ -53,7 +53,6 @@
 #define PHY_UCODE_V2_FILE_NAME		"phy_ucode20.elf"
 #define DEFAULT_FW_FILE_NAME		"amss.bin"
 #define FW_V2_FILE_NAME			"amss20.bin"
-#define DEFAULT_GENOA_FW_FTM_NAME	"genoaftm.bin"
 #define DEVICE_MAJOR_VERSION_MASK	0xF
 
 #define WAKE_MSI_NAME			"WAKE"
@@ -3821,12 +3820,6 @@ int cnss_wlan_register_driver(struct cnss_wlan_driver *driver_ops)
 	}
 	set_bit(CNSS_DRIVER_REGISTER, &plat_priv->driver_state);
 
-	if (plat_priv->device_id == QCN7605_DEVICE_ID &&
-	    driver_ops->get_driver_mode) {
-		plat_priv->driver_mode = driver_ops->get_driver_mode();
-		cnss_pci_update_fw_name(pci_priv);
-	}
-
 	if (!plat_priv->cbc_enabled ||
 	    test_bit(CNSS_COLD_BOOT_CAL_DONE, &plat_priv->driver_state))
 		goto register_driver;
@@ -3959,8 +3952,14 @@ static int cnss_pci_suspend_driver(struct cnss_pci_data *pci_priv)
 	    driver_ops && driver_ops->suspend) {
 		ret = driver_ops->suspend(pci_dev, state);
 		if (ret) {
+			#ifndef OPLUS_FEATURE_WIFI_DCS_SWITCH
+			//Add for wifi switch monitor
 			cnss_pr_err("Failed to suspend host driver, err = %d\n",
 				    ret);
+			#else
+			cnss_pr_info("Failed to suspend host driver, err = %d\n",
+				    ret);
+			#endif  /* OPLUS_FEATURE_WIFI_DCS_SWITCH */
 			ret = -EAGAIN;
 		}
 	}
@@ -4035,6 +4034,10 @@ int cnss_pci_resume_bus(struct cnss_pci_data *pci_priv)
 {
 	struct pci_dev *pci_dev = pci_priv->pci_dev;
 	int ret = 0;
+	#ifdef OPLUS_FEATURE_WIFI_DCS_SWITCH
+	//Add for wifi switch monitor
+	struct cnss_plat_data *plat_priv = pci_priv->plat_priv;
+	#endif /* OPLUS_FEATURE_WIFI_DCS_SWITCH*/
 
 	if (pci_priv->pci_link_state == PCI_LINK_UP)
 		goto out;
@@ -4042,10 +4045,21 @@ int cnss_pci_resume_bus(struct cnss_pci_data *pci_priv)
 	if (cnss_set_pci_link(pci_priv, PCI_LINK_UP)) {
 		cnss_fatal_err("Failed to resume PCI link from suspend\n");
 		cnss_pci_link_down(&pci_dev->dev);
+		#ifdef OPLUS_FEATURE_WIFI_DCS_SWITCH
+		//Add for wifi switch monitor
+		if (plat_priv) {
+			set_bit(CNSS_PCIE_LINK_DOWN,&plat_priv->pcieLinkDown);
+		}
+		#endif /* OPLUS_FEATURE_WIFI_DCS_SWITCH */
 		ret = -EAGAIN;
 		goto out;
 	}
-
+	#ifdef OPLUS_FEATURE_WIFI_DCS_SWITCH
+	//Add for wifi switch monitor
+		if (plat_priv) {
+			clear_bit(CNSS_PCIE_LINK_DOWN,&plat_priv->pcieLinkDown);
+		}
+	#endif /* OPLUS_FEATURE_WIFI_DCS_SWITCH */
 	pci_priv->pci_link_state = PCI_LINK_UP;
 
 	if (pci_priv->drv_connected_last)
@@ -4301,9 +4315,9 @@ static int cnss_pci_runtime_resume(struct device *dev)
 		cnss_pr_dbg("PCI link down recovery is in progress!\n");
 		return -EAGAIN;
 	}
-
+	#ifndef OPLUS_BUG_STABILITY
 	cnss_pr_vdbg("Runtime resume start\n");
-
+	#endif /* OPLUS_BUG_STABILITY */
 	driver_ops = pci_priv->driver_ops;
 	if (driver_ops && driver_ops->runtime_ops &&
 	    driver_ops->runtime_ops->runtime_resume)
@@ -6113,10 +6127,20 @@ int cnss_pci_force_fw_assert_hdlr(struct cnss_pci_data *pci_priv)
 	ret = cnss_pci_check_link_status(pci_priv);
 	if (ret) {
 		cnss_pci_link_down(&pci_priv->pci_dev->dev);
+		#ifdef OPLUS_FEATURE_WIFI_DCS_SWITCH
+		//Add for wifi switch monitor
+		set_bit(CNSS_PCIE_LINK_DOWN,&plat_priv->pcieLinkDown);
+		#endif /* OPLUS_FEATURE_WIFI_DCS_SWITCH */
 		cnss_pci_pm_runtime_mark_last_busy(pci_priv);
 		cnss_pci_pm_runtime_put_autosuspend(pci_priv, RTPM_ID_CNSS);
 		return 0;
 	}
+
+	#ifdef OPLUS_FEATURE_WIFI_DCS_SWITCH
+	//Add for wifi switch monitor
+	clear_bit(CNSS_PCIE_LINK_DOWN,&plat_priv->pcieLinkDown);
+	#endif /* OPLUS_FEATURE_WIFI_DCS_SWITCH */
+
 
 	/*
 	 * Fist try MHI SYS_ERR, if fails try HOST SOL and return.
@@ -6667,23 +6691,6 @@ static int cnss_pci_update_fw_name(struct cnss_pci_data *pci_priv)
 				 MAX_FIRMWARE_NAME_LEN,
 				 DEFAULT_FW_FILE_NAME);
 			break;
-		}
-		break;
-	case QCN7605_DEVICE_ID:
-		if (plat_priv->driver_mode == CNSS_FTM) {
-			cnss_pci_add_fw_prefix_name(pci_priv,
-						    plat_priv->firmware_name,
-						    DEFAULT_GENOA_FW_FTM_NAME);
-			snprintf(plat_priv->fw_fallback_name,
-				 MAX_FIRMWARE_NAME_LEN,
-				 DEFAULT_GENOA_FW_FTM_NAME);
-		} else {
-			cnss_pci_add_fw_prefix_name(pci_priv,
-						    plat_priv->firmware_name,
-						    DEFAULT_FW_FILE_NAME);
-			snprintf(plat_priv->fw_fallback_name,
-				 MAX_FIRMWARE_NAME_LEN,
-				 DEFAULT_FW_FILE_NAME);
 		}
 		break;
 	default:
@@ -7806,7 +7813,10 @@ static int cnss_pci_enumerate(struct cnss_plat_data *plat_priv, u32 rc_num)
 	} else {
 		cnss_pci_downgrade_rc_speed(plat_priv, rc_num);
 	}
-
+	#ifdef OPLUS_FEATURE_WIFI_DCS_SWITCH
+	//Add for wifi switch monitor
+	clear_bit(CNSS_PCIE_ENUM_FAIL, &plat_priv->pcieEnumState);
+	#endif /* OPLUS_FEATURE_WIFI_DCS_SWITCH */
 	cnss_pr_dbg("Trying to enumerate with PCIe RC%x\n", rc_num);
 retry:
 	ret = _cnss_pci_enumerate(plat_priv, rc_num);
@@ -7821,6 +7831,10 @@ retry:
 			cnss_pr_dbg("Retry PCI link training #%d\n", retry);
 			goto retry;
 		} else {
+			#ifdef OPLUS_FEATURE_WIFI_DCS_SWITCH
+			//Add for wifi switch monitor
+			set_bit(CNSS_PCIE_ENUM_FAIL, &plat_priv->pcieEnumState);
+			#endif /* OPLUS_FEATURE_WIFI_DCS_SWITCH */
 			goto out;
 		}
 	}
@@ -7872,7 +7886,6 @@ int cnss_pci_init(struct cnss_plat_data *plat_priv)
 		}
 		cnss_driver_registered = true;
 	}
-
 	return 0;
 
 unreg_pci:
