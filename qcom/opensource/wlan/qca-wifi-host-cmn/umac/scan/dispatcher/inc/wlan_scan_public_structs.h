@@ -682,6 +682,11 @@ struct scan_cache_entry {
 	uint8_t mlo_max_recom_simult_links;
 #endif
 	enum wlan_phymode non_intersected_phymode;
+#ifdef OPLUS_FEATURE_WIFI_VENDOR_FT
+	bool vendor_ft_adaptive;
+	uint8_t vendor_ft_mdie[WLAN_MOBILITY_DOMAIN_IE_MAX_LEN + 2];
+	uint32_t vendor_ft_rsn_offset;
+#endif /* OPLUS_FEATURE_WIFI_VENDOR_FT */
 };
 
 #define MAX_FAVORED_BSSID 16
@@ -741,7 +746,6 @@ enum dot11_mode_filter {
  * @ignore_nol_chan: Ignore entry with channel in the NOL list
  * @ignore_6ghz_channel: ignore 6Ghz channels
  * @match_mld_addr: Flag to match mld addr of scan entry
- * @match_link_id: Flag to match self IEEE link id of scan entry
  * @age_threshold: If set return entry which are newer than the age_threshold
  * @num_of_bssid: number of bssid passed
  * @num_of_ssid: number of ssid
@@ -767,7 +771,6 @@ enum dot11_mode_filter {
  * @ccx_validate_bss: Function pointer to custom bssid filter
  * @ccx_validate_bss_arg: Function argument to custom bssid filter
  * @band_bitmap: Allowed band bit map, BIT0: 2G, BIT1: 5G, BIT2: 6G
- * @link_id: IEEE link ID to match if @match_link_id is set to %true
  * @mld_addr: MLD addr to match if @match_mld_addr is set to true.
  */
 struct scan_filter {
@@ -777,8 +780,7 @@ struct scan_filter {
 		ignore_auth_enc_type:1,
 		ignore_nol_chan:1,
 		ignore_6ghz_channel:1,
-		match_mld_addr:1,
-		match_link_id:1;
+		match_mld_addr:1;
 	qdf_time_t age_threshold;
 	uint8_t num_of_bssid;
 	uint8_t num_of_ssid;
@@ -807,7 +809,6 @@ struct scan_filter {
 	bss_filter_arg_t ccx_validate_bss_arg;
 #ifdef WLAN_FEATURE_11BE_MLO
 	uint32_t band_bitmap;
-	uint8_t link_id;
 	struct qdf_mac_addr mld_addr;
 #endif
 };

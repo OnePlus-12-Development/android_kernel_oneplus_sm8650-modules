@@ -18,7 +18,7 @@
  */
 
 #include <osdep.h>
-#include "wmi.h"
+#include "api/fw/wmi.h"
 #include "wmi_unified_priv.h"
 
 /**

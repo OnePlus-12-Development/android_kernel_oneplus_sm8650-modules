@@ -22,7 +22,7 @@
 #include "athdefs.h"
 #include "a_types.h"
 #include "dbglog_host.h"
-#include "wmi.h"
+#include "api/fw/wmi.h"
 #include "wmi_unified_api.h"
 #include "wma.h"
 #include "ol_defines.h"

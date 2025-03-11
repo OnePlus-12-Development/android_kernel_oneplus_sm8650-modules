@@ -18,7 +18,7 @@
  */
 
 #include "osdep.h"
-#include "wmi.h"
+#include "api/fw/wmi.h"
 #include "wmi_unified_priv.h"
 #include "wlan_fwol_public_structs.h"
 #include "wmi_unified_fwol_api.h"

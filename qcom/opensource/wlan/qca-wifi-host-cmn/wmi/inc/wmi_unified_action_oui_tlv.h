@@ -21,7 +21,7 @@
 
 #ifdef WLAN_FEATURE_ACTION_OUI
 
-#include "wmi.h"
+#include "api/fw/wmi.h"
 #include "wmi_unified.h"
 #include "wmi_unified_api.h"
 #include "wmi_unified_param.h"

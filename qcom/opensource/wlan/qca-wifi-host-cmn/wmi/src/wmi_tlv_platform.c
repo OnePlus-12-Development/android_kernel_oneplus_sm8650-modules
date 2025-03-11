@@ -23,7 +23,7 @@
 #include <qdf_mem.h>         /* qdf_mem_malloc,free, etc. */
 #include <osdep.h>
 #include "htc_api.h"
-#include "wmi.h"
+#include "api/fw/wmi.h"
 
 
 /* Following macro definitions use OS or platform specific functions */
