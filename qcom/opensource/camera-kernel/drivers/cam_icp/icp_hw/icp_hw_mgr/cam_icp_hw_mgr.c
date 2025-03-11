@@ -51,7 +51,9 @@
 #define ICP_WORKQ_TASK_MSG_TYPE 2
 
 #define ICP_DEVICE_IDLE_TIMEOUT 400
-
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+#include "oplus_cam_kevent_fb.h"
+#endif
 /*
  * If synx fencing is enabled, send FW memory mapping
  * for synx hw_mutex, ipc hw_mutex, synx global mem
@@ -2511,6 +2513,8 @@ static int cam_icp_mgr_process_msg_frame_process(uint32_t *msg_ptr)
 	if (ioconfig_ack->err_type != CAMERAICP_SUCCESS) {
 		cam_icp_mgr_handle_frame_process(msg_ptr,
 			ICP_FRAME_PROCESS_FAILURE);
+		if (ioconfig_ack->err_type == CAMERAICP_EABORTED)
+			return 0;
 		return -EIO;
 	}
 
@@ -2969,68 +2973,90 @@ static int cam_icp_mgr_process_fatal_error(
 static void cam_icp_mgr_process_dbg_buf(struct cam_icp_hw_mgr *hw_mgr)
 {
 	uint32_t *msg_ptr = NULL, *pkt_ptr = NULL;
-	struct hfi_msg_debug *dbg_msg;
-	uint32_t read_len, size_processed = 0, debug_lvl;
+	struct hfi_msg_debug *dbg_msg = NULL;
+	uint32_t read_in_words, remain_len, pre_remain_len = 0;
+	uint32_t buf_word_size = ICP_DBG_BUF_SIZE_IN_WORDS;
 	uint64_t timestamp = 0;
-	char *dbg_buf;
+	char *msg_data;
 	int rc = 0;
 
-	rc = hfi_read_message(hw_mgr->hfi_handle, hw_mgr->dbg_buf, Q_DBG,
-		ICP_DBG_BUF_SIZE_IN_WORDS, &read_len);
-	if (rc)
+	if (!hw_mgr) {
+		CAM_ERR(CAM_ICP, "Invalid data");
 		return;
-
-	msg_ptr = (uint32_t *)hw_mgr->dbg_buf;
-	debug_lvl = hw_mgr->icp_dbg_lvl;
-	while (true) {
-		pkt_ptr = msg_ptr;
-		if (pkt_ptr[ICP_PACKET_TYPE] == HFI_MSG_SYS_DEBUG) {
-			dbg_msg = (struct hfi_msg_debug *)pkt_ptr;
-			dbg_buf = (char *)&dbg_msg->msg_data;
-			timestamp = ((((uint64_t)(dbg_msg->timestamp_hi) << 32)
-				| dbg_msg->timestamp_lo) >> 16);
-			trace_cam_icp_fw_dbg(dbg_buf, timestamp/2,
-				hw_mgr->hw_mgr_name);
-			if (!debug_lvl)
-				CAM_INFO(CAM_ICP, "[%s]: FW_DBG:%s",
-					hw_mgr->hw_mgr_name, dbg_buf);
-		}
-		size_processed += (pkt_ptr[ICP_PACKET_SIZE] >>
-			BYTE_WORD_SHIFT);
-		if (size_processed >= read_len)
-			return;
-		msg_ptr += (pkt_ptr[ICP_PACKET_SIZE] >>
-		BYTE_WORD_SHIFT);
 	}
+
+	do {
+		rc = hfi_read_message(hw_mgr->hfi_handle,
+			hw_mgr->dbg_buf + (pre_remain_len >> BYTE_WORD_SHIFT),
+			Q_DBG, buf_word_size, &read_in_words);
+		if (rc)
+			break;
+
+		remain_len = pre_remain_len + (read_in_words << BYTE_WORD_SHIFT);
+		pre_remain_len = 0;
+		msg_ptr = (uint32_t *)hw_mgr->dbg_buf;
+		buf_word_size = ICP_DBG_BUF_SIZE_IN_WORDS;
+
+		while (remain_len) {
+			pkt_ptr = msg_ptr;
+			if ((remain_len < sizeof(struct hfi_msg_debug)) ||
+				(remain_len < pkt_ptr[ICP_PACKET_SIZE])) {
+				/*
+				 * MSG is broken into two parts, need to read from dbg q again
+				 * to complete the msg and get the remaining packets. Copy
+				 * the remain data to start of buffer and shift buffer ptr to
+				 * after the remaining data ends to read from queue.
+				 */
+				memcpy(hw_mgr->dbg_buf, msg_ptr, remain_len);
+				pre_remain_len = remain_len;
+				buf_word_size -= (pre_remain_len >> BYTE_WORD_SHIFT);
+				break;
+			}
+
+			if (pkt_ptr[ICP_PACKET_TYPE] == HFI_MSG_SYS_DEBUG) {
+				dbg_msg = (struct hfi_msg_debug *)pkt_ptr;
+				msg_data = (char *)&dbg_msg->msg_data;
+				timestamp = ((((uint64_t)(dbg_msg->timestamp_hi) << 32)
+					| dbg_msg->timestamp_lo) >> 16);
+				trace_cam_icp_fw_dbg(msg_data, timestamp/2,
+					hw_mgr->hw_mgr_name);
+				if (!hw_mgr->icp_dbg_lvl)
+					CAM_INFO(CAM_ICP, "[%s]: FW_DBG:%s",
+						hw_mgr->hw_mgr_name, msg_data);
+			}
+
+			remain_len -= pkt_ptr[ICP_PACKET_SIZE];
+			if (remain_len > 0)
+				msg_ptr += (pkt_ptr[ICP_PACKET_SIZE] >> BYTE_WORD_SHIFT);
+			else
+				break;
+		}
+
+	/* Repeat reading if drain buffer is insufficient to read all MSGs at once */
+	} while (read_in_words >= buf_word_size);
 }
 
 static int cam_icp_process_msg_pkt_type(
 	struct cam_icp_hw_mgr *hw_mgr,
-	uint32_t *msg_ptr,
-	uint32_t *msg_processed_len)
+	uint32_t *msg_ptr)
 {
 	int rc = 0;
-	int size_processed = 0;
 
 	switch (msg_ptr[ICP_PACKET_TYPE]) {
 	case HFI_MSG_SYS_INIT_DONE:
 		CAM_DBG(CAM_ICP, "[%s] received SYS_INIT_DONE", hw_mgr->hw_mgr_name);
 		complete(&hw_mgr->icp_complete);
-		size_processed = (
-			(struct hfi_msg_init_done *)msg_ptr)->size;
 		break;
 
 	case HFI_MSG_SYS_PC_PREP_DONE:
 		CAM_DBG(CAM_ICP, "[%s] HFI_MSG_SYS_PC_PREP_DONE is received\n",
 			hw_mgr->hw_mgr_name);
 		complete(&hw_mgr->icp_complete);
-		size_processed = sizeof(struct hfi_msg_pc_prep_done);
 		break;
 
 	case HFI_MSG_SYS_PING_ACK:
 		CAM_DBG(CAM_ICP, "[%s] received SYS_PING_ACK", hw_mgr->hw_mgr_name);
 		rc = cam_icp_mgr_process_msg_ping_ack(msg_ptr);
-		size_processed = sizeof(struct hfi_msg_ping_ack);
 		break;
 
 	case HFI_MSG_IPEBPS_CREATE_HANDLE_ACK:
@@ -3038,62 +3064,162 @@ static int cam_icp_process_msg_pkt_type(
 		CAM_DBG(CAM_ICP, "[%s] received IPE/BPS/OFE CREATE_HANDLE_ACK",
 			hw_mgr->hw_mgr_name);
 		rc = cam_icp_mgr_process_msg_create_handle(msg_ptr);
-		size_processed = sizeof(struct hfi_msg_create_handle_ack);
 		break;
 
 	case HFI_MSG_IPEBPS_ASYNC_COMMAND_INDIRECT_ACK:
 		CAM_DBG(CAM_ICP, "[%s] received IPE/BPS ASYNC_INDIRECT_ACK",
 			hw_mgr->hw_mgr_name);
 		rc = cam_icp_mgr_process_ipebps_indirect_ack_msg(msg_ptr);
-		size_processed = (
-			(struct hfi_msg_dev_async_ack *)msg_ptr)->size;
 		break;
 
 	case HFI_MSG_OFE_ASYNC_COMMAND_ACK:
 		CAM_DBG(CAM_ICP, "[%s] received OFE ASYNC COMMAND ACK",
 			hw_mgr->hw_mgr_name);
 		rc = cam_icp_mgr_process_ofe_indirect_ack_msg(msg_ptr);
-		size_processed = (
-			(struct hfi_msg_dev_async_ack *)msg_ptr)->size;
 		break;
 
 	case HFI_MSG_IPEBPS_ASYNC_COMMAND_DIRECT_ACK:
 		CAM_DBG(CAM_ICP, "[%s] received ASYNC_DIRECT_ACK", hw_mgr->hw_mgr_name);
 		rc = cam_icp_mgr_process_direct_ack_msg(msg_ptr);
-		size_processed = (
-			(struct hfi_msg_dev_async_ack *)msg_ptr)->size;
 		break;
 
 	case HFI_MSG_EVENT_NOTIFY:
 		CAM_DBG(CAM_ICP, "[%s] received EVENT_NOTIFY", hw_mgr->hw_mgr_name);
-		size_processed = (
-			(struct hfi_msg_event_notify *)msg_ptr)->size;
 		rc = cam_icp_mgr_process_fatal_error(hw_mgr, msg_ptr);
 		if (rc)
 			CAM_ERR(CAM_ICP, "[%s] failed in processing evt notify",
 				hw_mgr->hw_mgr_name);
-
 		break;
 
 	case HFI_MSG_DBG_SYNX_TEST:
 		CAM_DBG(CAM_ICP, "received DBG_SYNX_TEST");
-		size_processed = sizeof(struct hfi_cmd_synx_test_payload);
 		complete(&hw_mgr->icp_complete);
 		break;
+
 	default:
 		CAM_ERR(CAM_ICP, "[%s] invalid msg : %u",
 			hw_mgr->hw_mgr_name, msg_ptr[ICP_PACKET_TYPE]);
 		rc = -EINVAL;
 	}
 
-	*msg_processed_len = size_processed;
 	return rc;
 }
 
-static int32_t cam_icp_mgr_process_msg(void *priv, void *data)
+static int cam_icp_get_msg_pkt_size(
+	struct cam_icp_hw_mgr *hw_mgr,
+	uint32_t *msg_ptr,
+	uint32_t *pkt_size)
 {
-	uint32_t read_len, msg_processed_len;
+	switch (msg_ptr[ICP_PACKET_TYPE]) {
+	case HFI_MSG_SYS_INIT_DONE:
+		*pkt_size = (
+			(struct hfi_msg_init_done *)msg_ptr)->size;
+		break;
+	case HFI_MSG_SYS_PC_PREP_DONE:
+		*pkt_size = sizeof(struct hfi_msg_pc_prep_done);
+		break;
+	case HFI_MSG_SYS_PING_ACK:
+		*pkt_size = sizeof(struct hfi_msg_ping_ack);
+		break;
+	case HFI_MSG_IPEBPS_CREATE_HANDLE_ACK:
+	case HFI_MSG_OFE_CREATE_HANDLE_ACK:
+		*pkt_size = sizeof(struct hfi_msg_create_handle_ack);
+		break;
+	case HFI_MSG_IPEBPS_ASYNC_COMMAND_INDIRECT_ACK:
+		*pkt_size = (
+			(struct hfi_msg_dev_async_ack *)msg_ptr)->size;
+		break;
+	case HFI_MSG_OFE_ASYNC_COMMAND_ACK:
+		*pkt_size = (
+			(struct hfi_msg_dev_async_ack *)msg_ptr)->size;
+		break;
+	case HFI_MSG_IPEBPS_ASYNC_COMMAND_DIRECT_ACK:
+		*pkt_size = (
+			(struct hfi_msg_dev_async_ack *)msg_ptr)->size;
+		break;
+	case HFI_MSG_EVENT_NOTIFY:
+		*pkt_size = (
+			(struct hfi_msg_event_notify *)msg_ptr)->size;
+		break;
+	case HFI_MSG_DBG_SYNX_TEST:
+		*pkt_size = sizeof(struct hfi_cmd_synx_test_payload);
+		break;
+	default:
+		CAM_ERR(CAM_ICP, "[%s] invalid msg : %u",
+			hw_mgr->hw_mgr_name, msg_ptr[ICP_PACKET_TYPE]);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int cam_icp_mgr_process_msg(struct cam_icp_hw_mgr *hw_mgr)
+{
+	uint32_t msg_pkt_size, read_in_words;
+	uint32_t remain_len, pre_remain_len = 0;
 	uint32_t *msg_ptr = NULL;
+	uint32_t buf_word_size = ICP_MSG_BUF_SIZE_IN_WORDS;
+	int rc = 0;
+
+	if (!hw_mgr) {
+		CAM_ERR(CAM_ICP, "Invalid data");
+		return -EINVAL;
+	}
+
+	do {
+		rc = hfi_read_message(hw_mgr->hfi_handle,
+			hw_mgr->msg_buf + (pre_remain_len >> BYTE_WORD_SHIFT),
+			Q_MSG, buf_word_size, &read_in_words);
+		if (rc) {
+			if (rc != -ENOMSG)
+				CAM_DBG(CAM_ICP, "Unable to read msg q rc %d", rc);
+			break;
+		}
+
+		remain_len = pre_remain_len + (read_in_words << BYTE_WORD_SHIFT);
+		pre_remain_len = 0;
+		msg_ptr = (uint32_t *)hw_mgr->msg_buf;
+		buf_word_size = ICP_MSG_BUF_SIZE_IN_WORDS;
+
+		while (remain_len) {
+			rc = cam_icp_get_msg_pkt_size(hw_mgr, msg_ptr, &msg_pkt_size);
+			if (rc) {
+				CAM_ERR(CAM_ICP, "Failed to get pkt size");
+				break;
+			}
+
+			if (remain_len < msg_pkt_size) {
+				/*
+				 * MSG is broken into two parts, need to read from msg q again
+				 * to complete the msg and get the remaining packets. Copy
+				 * the remain data to start of buffer and shift buffer ptr to
+				 * after the remaining data ends to read from queue.
+				 */
+				memcpy(hw_mgr->msg_buf, msg_ptr, remain_len);
+				pre_remain_len = remain_len;
+				buf_word_size -= (pre_remain_len >> BYTE_WORD_SHIFT);
+				break;
+			}
+
+			rc = cam_icp_process_msg_pkt_type(hw_mgr, msg_ptr);
+			if (rc)
+				CAM_ERR(CAM_ICP, "Failed to process MSG");
+
+			remain_len -= msg_pkt_size;
+			if (remain_len > 0) {
+				msg_ptr += (msg_pkt_size >> BYTE_WORD_SHIFT);
+				msg_pkt_size = 0;
+			} else
+				break;
+		}
+	/* Repeat reading if drain buffer is insufficient to read all MSGs at once */
+	} while (read_in_words >= buf_word_size);
+
+	return rc;
+}
+
+static int32_t cam_icp_mgr_process_cb(void *priv, void *data)
+{
 	struct hfi_msg_work_data *task_data;
 	struct cam_icp_hw_mgr *hw_mgr;
 	int rc = 0;
@@ -3106,33 +3232,9 @@ static int32_t cam_icp_mgr_process_msg(void *priv, void *data)
 	task_data = data;
 	hw_mgr = priv;
 
-	rc = hfi_read_message(hw_mgr->hfi_handle, hw_mgr->msg_buf, Q_MSG,
-		ICP_MSG_BUF_SIZE_IN_WORDS, &read_len);
-	if (rc) {
-		CAM_DBG(CAM_ICP, "Unable to read msg q rc %d", rc);
-	} else {
-		read_len = read_len << BYTE_WORD_SHIFT;
-		msg_ptr = (uint32_t *)hw_mgr->msg_buf;
-		while (true) {
-			cam_icp_process_msg_pkt_type(hw_mgr, msg_ptr,
-				&msg_processed_len);
-
-			if (!msg_processed_len) {
-				CAM_ERR(CAM_ICP, "Failed to read");
-				rc = -EINVAL;
-				break;
-			}
-
-			read_len -= msg_processed_len;
-			if (read_len > 0) {
-				msg_ptr += (msg_processed_len >>
-				BYTE_WORD_SHIFT);
-				msg_processed_len = 0;
-			} else {
-				break;
-			}
-		}
-	}
+	rc = cam_icp_mgr_process_msg(hw_mgr);
+	if (rc && (rc != -ENOMSG))
+		CAM_ERR(CAM_ICP, "Failed to process MSG");
 
 	cam_icp_mgr_process_dbg_buf(hw_mgr);
 
@@ -3170,7 +3272,7 @@ static int32_t cam_icp_hw_mgr_cb(void *data, bool recover)
 	task_data->data = hw_mgr;
 	task_data->recover = recover;
 	task_data->type = ICP_WORKQ_TASK_MSG_TYPE;
-	task->process_cb = cam_icp_mgr_process_msg;
+	task->process_cb = cam_icp_mgr_process_cb;
 	rc = cam_req_mgr_workq_enqueue_task(task, hw_mgr,
 		CRM_TASK_PRIORITY_0);
 	spin_unlock_irqrestore(&hw_mgr->hw_mgr_lock, flags);
@@ -4221,6 +4323,11 @@ static int cam_icp_mgr_abort_handle_wq(
 		(struct cam_icp_hw_ctx_data *)task_data->data;
 	hw_mgr = ctx_data->hw_mgr_priv;
 
+	if (ctx_data->state == CAM_ICP_CTX_STATE_RELEASE || !hw_mgr) {
+		CAM_ERR(CAM_ICP, "ctx data has been released");
+		return 0;
+	}
+
 	rc = cam_icp_mgr_populate_abort_cmd(ctx_data, &abort_cmd);
 	if (rc)
 		return rc;
@@ -5124,7 +5231,9 @@ static int cam_icp_mgr_send_config_io(struct cam_icp_hw_ctx_data *ctx_data,
 	int timeout = 5000;
 	struct crm_workq_task *task;
 	uint32_t size_in_words;
-
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+	char fb_payload[PAYLOAD_LENGTH] = {0};
+#endif
 	task = cam_req_mgr_workq_get_task(hw_mgr->cmd_work);
 	if (!task) {
 		CAM_ERR_RATE_LIMIT(CAM_ICP, "%s: No free cmd task", ctx_data->ctx_id_string);
@@ -5180,6 +5289,9 @@ static int cam_icp_mgr_send_config_io(struct cam_icp_hw_ctx_data *ctx_data,
 			"%s: FW response timeout for send IO cfg handle command on",
 			ctx_data->ctx_id_string);
 	if (!rem_jiffies) {
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+		KEVENT_FB_FRAME_ERROR(fb_payload, "FW response timeout",ctx_data->ctx_id);
+#endif
 		/* send specific error for io config failure */
 		rc = -EREMOTEIO;
 		cam_icp_dump_debug_info(hw_mgr, false);
@@ -5393,8 +5505,7 @@ static bool cam_icp_mgr_is_valid_outconfig(struct cam_packet *packet)
 		packet->io_configs_offset/4);
 
 	for (i = 0 ; i < packet->num_io_configs; i++)
-		if ((io_cfg_ptr[i].direction == CAM_BUF_OUTPUT) ||
-			(io_cfg_ptr[i].direction == CAM_BUF_IN_OUT))
+		if (io_cfg_ptr[i].direction == CAM_BUF_OUTPUT)
 			num_out_map_entries++;
 
 	if (num_out_map_entries <= CAM_MAX_OUT_RES) {
@@ -5551,20 +5662,13 @@ static int cam_icp_mgr_process_io_cfg(struct cam_icp_hw_mgr *hw_mgr,
 		if (io_cfg_ptr[i].direction == CAM_BUF_INPUT) {
 			sync_in_obj[j++] = io_cfg_ptr[i].fence;
 			prepare_args->num_in_map_entries++;
-		} else if ((io_cfg_ptr[i].direction == CAM_BUF_OUTPUT) ||
-			(io_cfg_ptr[i].direction == CAM_BUF_IN_OUT)) {
+		} else {
 			prepare_args->out_map_entries[k].sync_id =
 				io_cfg_ptr[i].fence;
 			prepare_args->out_map_entries[k].resource_handle =
 				io_cfg_ptr[i].resource_type;
 			k++;
 			prepare_args->num_out_map_entries++;
-		} else {
-			CAM_ERR(CAM_ICP, "dir: %d, max_out:%u, out %u",
-				io_cfg_ptr[i].direction,
-				prepare_args->max_out_map_entries,
-				prepare_args->num_out_map_entries);
-			return -EINVAL;
 		}
 
 		CAM_DBG(CAM_REQ,
@@ -5792,11 +5896,6 @@ static int cam_icp_packet_generic_blob_handler(void *user_data,
 
 	switch (blob_type) {
 	case CAM_ICP_CMD_GENERIC_BLOB_CLK:
-		if (index < 0) {
-			CAM_ERR(CAM_ICP, "Invalid index %d", index);
-			return -EINVAL;
-		}
-
 		CAM_WARN_RATE_LIMIT_CUSTOM(CAM_PERF, 300, 1,
 			"Using deprecated blob type GENERIC_BLOB_CLK");
 		if (blob_size != sizeof(struct cam_icp_clk_bw_request)) {
@@ -5828,11 +5927,6 @@ static int cam_icp_packet_generic_blob_handler(void *user_data,
 		break;
 
 	case CAM_ICP_CMD_GENERIC_BLOB_CLK_V2:
-		if (index < 0) {
-			CAM_ERR(CAM_ICP, "Invalid index %d", index);
-			return -EINVAL;
-		}
-
 		if (blob_size < sizeof(struct cam_icp_clk_bw_request_v2)) {
 			CAM_ERR(CAM_ICP, "%s: Mismatch blob size %d expected %lu",
 				ctx_data->ctx_id_string,
@@ -5980,11 +6074,6 @@ static int cam_icp_packet_generic_blob_handler(void *user_data,
 		break;
 
 	case CAM_ICP_CMD_GENERIC_BLOB_PRESIL_HANGDUMP:
-		if (index < 0) {
-			CAM_ERR(CAM_ICP, "Invalid index %d", index);
-			return -EINVAL;
-		}
-
 		if (cam_presil_mode_enabled()) {
 			cmd_mem_regions = (struct cam_cmd_mem_regions *)blob_data;
 			if (cmd_mem_regions->num_regions <= 0) {
