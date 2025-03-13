@@ -11,8 +11,8 @@ ifeq ($(ENABLE_HYP), true)
         KGSL_ENABLED := false
 endif
 
-LOCAL_MODULE_DDK_BUILD := true
-LOCAL_MODULE_DDK_ALLOW_UNSAFE_HEADERS := true
+#LOCAL_MODULE_DDK_BUILD := true
+#LOCAL_MODULE_DDK_ALLOW_UNSAFE_HEADERS := true
 
 ifeq ($(KGSL_ENABLED),true)
 KGSL_SELECT := CONFIG_QCOM_KGSL=m
@@ -36,6 +36,10 @@ ifeq ($(TARGET_BOARD_PLATFORM), pineapple)
 	KBUILD_OPTIONS += KBUILD_EXTRA_SYMBOLS+=$(PWD)/$(call intermediates-dir-for,DLKM,hw-fence-module-symvers)/Module.symvers
 endif
 
+ifeq ($(TARGET_BOARD_PLATFORM), volcano)
+ 	KBUILD_OPTIONS += KBUILD_EXTRA_SYMBOLS+=$(PWD)/$(call intermediates-dir-for,DLKM,hw-fence-module-symvers)/Module.symvers
+endif
+
 include $(CLEAR_VARS)
 # For incremental compilation
 LOCAL_SRC_FILES   := $(wildcard $(LOCAL_PATH)/**/*) $(wildcard $(LOCAL_PATH)/*)
@@ -49,9 +53,17 @@ ifeq ($(TARGET_BOARD_PLATFORM), pineapple)
 	LOCAL_REQUIRED_MODULES    := hw-fence-module-symvers
 	LOCAL_ADDITIONAL_DEPENDENCIES := $(call intermediates-dir-for,DLKM,hw-fence-module-symvers)/Module.symvers
 endif
+
+ifeq ($(TARGET_BOARD_PLATFORM), volcano)
+ 	LOCAL_REQUIRED_MODULES    := hw-fence-module-symvers
+ 	LOCAL_ADDITIONAL_DEPENDENCIES := $(call intermediates-dir-for,DLKM,hw-fence-module-symvers)/Module.symvers
+endif
+
 # Include msm_kgsl.ko in the /vendor/lib/modules (vendor.img)
 BOARD_VENDOR_KERNEL_MODULES += $(LOCAL_MODULE_PATH)/$(LOCAL_MODULE)
 include $(DLKM_DIR)/Build_external_kernelmodule.mk
+
+include $(LOCAL_PATH)/oplus_sync_fence/Android.mk
 
 endif # DLKM check
 endif # KGSL_ENABLED
