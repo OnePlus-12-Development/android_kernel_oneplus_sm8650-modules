@@ -5045,6 +5045,11 @@ ifeq ($(CONFIG_ARCH_PINEAPPLE), y)
 ccflags-y += -gdwarf-4
 endif
 
+#ifdef OPLUS_BUG_STABILITY
+#Modify for: enable macro OPLUS_BUG_STABILITY for some bug fix
+ccflags-y +=   -DOPLUS_BUG_STABILITY
+#endif
+
 # Module information used by KBuild framework
 obj-$(CONFIG_QCA_CLD_WLAN) += $(MODNAME).o
 ifeq ($(CONFIG_WLAN_RESIDENT_DRIVER), y)
