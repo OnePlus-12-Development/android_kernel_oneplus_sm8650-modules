@@ -1,1 +1,0 @@
-../../../dsp-kernel/include/linux/fastrpc.h
