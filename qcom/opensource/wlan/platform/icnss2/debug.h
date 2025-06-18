@@ -117,6 +117,9 @@ int icnss_debugfs_create(struct icnss_priv *priv);
 void icnss_debugfs_destroy(struct icnss_priv *priv);
 #ifdef OPLUS_FEATURE_WIFI_DCS_SWITCH
 //Add for wifi switch monitor
+u64 oplus_conn_get_local_seconds(void);
+ssize_t icnss_show_cnss_debug(struct device_driver *driver, char *buf);
+void oplus_free_cnss_error_logs(void);
 void oplus_cnss_error_log_add(char *fmt, ...);
 #endif  /* OPLUS_FEATURE_WIFI_DCS_SWITCH */
 #endif /* _ICNSS_DEBUG_H */
