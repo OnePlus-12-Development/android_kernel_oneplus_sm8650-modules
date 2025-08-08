@@ -907,19 +907,9 @@ int cnss_wlfw_bdf_dnld_send_sync(struct cnss_plat_data *plat_priv,
 
 	temp = fw_entry->data;
 	remaining = fw_entry->size;
-	#ifdef OPLUS_FEATURE_WIFI_DCS_SWITCH
-	//Add for wifi switch monitor
-	if (bdf_type == CNSS_BDF_REGDB) {
-		set_bit(CNSS_LOAD_REGDB_SUCCESS, &plat_priv->loadRegdbState);
-	} else if (bdf_type == CNSS_BDF_ELF){
-		set_bit(CNSS_LOAD_BDF_SUCCESS, &plat_priv->loadBdfState);
-	}
-	cnss_pr_info("Downloading %s: %s, size: %u\n",
-		    cnss_bdf_type_to_str(bdf_type), filename, remaining);
-	#else
+
 	cnss_pr_dbg("Downloading %s: %s, size: %u\n",
 		    cnss_bdf_type_to_str(bdf_type), filename, remaining);
-	#endif /* OPLUS_FEATURE_WIFI_DCS_SWITCH */
 
 	while (remaining) {
 		req->valid = 1;
@@ -1359,6 +1349,7 @@ int cnss_wlfw_wlan_mac_req_send_sync(struct cnss_plat_data *plat_priv,
 	int i;
 	char revert_mac[QMI_WLFW_MAC_ADDR_SIZE_V01];
 #endif /* OPLUS_FEATURE_WIFI_MAC */
+
 	if (!plat_priv || !mac || mac_len != QMI_WLFW_MAC_ADDR_SIZE_V01)
 		return -EINVAL;
 
@@ -1370,6 +1361,7 @@ int cnss_wlfw_wlan_mac_req_send_sync(struct cnss_plat_data *plat_priv,
 		ret = -EIO;
 		goto out;
 	}
+
 #ifdef OPLUS_FEATURE_WIFI_MAC
 	for (i = 0; i < QMI_WLFW_MAC_ADDR_SIZE_V01 ; i ++){
 		revert_mac[i] = mac[QMI_WLFW_MAC_ADDR_SIZE_V01 - i -1];
@@ -1382,7 +1374,6 @@ int cnss_wlfw_wlan_mac_req_send_sync(struct cnss_plat_data *plat_priv,
 			    mac, plat_priv->driver_state);
 	memcpy(req.mac_addr, mac, mac_len);
 #endif /* OPLUS_FEATURE_WIFI_MAC */
-
 	req.mac_addr_valid = 1;
 
 	ret = qmi_send_request(&plat_priv->qmi_wlfw, NULL, &txn,
