@@ -6,3 +6,14 @@ bool platform_of(const char *p)
 {
 	return false;
 }
+
+bool ftm_mode(void)
+{
+	return false;
+}
+
+bool rf_mode(void)
+{
+	return false;
+}
+

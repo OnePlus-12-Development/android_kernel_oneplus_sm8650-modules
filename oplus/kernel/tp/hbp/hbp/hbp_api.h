@@ -3,6 +3,10 @@
 
 #include "hbp_core.h"
 
+bool hbp_update_feature_param(struct hbp_feature *features,
+			      touch_feature mode,
+			      struct param_value *param);
+
 bool hbp_get_feature_param(struct hbp_feature *features,
 			   touch_feature mode,
 			   struct param_value *param);

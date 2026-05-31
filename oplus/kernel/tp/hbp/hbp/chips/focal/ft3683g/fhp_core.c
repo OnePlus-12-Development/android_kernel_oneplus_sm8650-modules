@@ -427,19 +427,15 @@ static int fhp_chip_get_irq_reason(void *priv, enum irq_reason *reason)
 	switch (reset_reason) {
 	case FTS_RST_REASON_FWUPDATE:
 		*reason = IRQ_REASON_RESET_FWUPDATE;
-		hbp_info("hbp chip reset, reason 0x%x(RESET_FWUPDATE)\n", *reason);
 		break;
 	case FTS_RST_REASON_WDT:
 		*reason = IRQ_REASON_RESET_WDT;
-		hbp_info("hbp chip reset, reason 0x%x(RESET_WDT)\n", *reason);
 		break;
 	case FTS_RST_REASON_EXTERNAL:
 		*reason = IRQ_REASON_RESET_EXTERNAL;
-		hbp_info("hbp chip reset, reason 0x%x(RESET_EXTERNAL)\n", *reason);
 		break;
 	case FTS_RST_REASON_PWR:
 		*reason = IRQ_REASON_RESET_PWR;
-		hbp_info("hbp chip reset, reason 0x%x(RESET_PWR)\n", *reason);
 		break;
 	case FTS_GESTURE_DIFF:
 		*reason = IRQ_REASON_GESTURE_DIFF;
@@ -449,6 +445,9 @@ static int fhp_chip_get_irq_reason(void *priv, enum irq_reason *reason)
 		break;
 	}
 
+	if (reset_reason != FTS_GESTURE_DIFF) {
+		hbp_info("hbp chip reset, reason 0x%x\n", *reason);
+	}
 	ret = fhp_chip_write_reg(fts, FTS_REG_RESET_REASON, 0x00);
 	if (ret < 0) {
 		hbp_err("failed to clear reset reason");
@@ -858,9 +857,28 @@ int fhp_write(u8 *writebuf, u32 writelen)
 	return fhp_chip_write(g_fts, writebuf, writelen);
 }
 
+int fhp_write_reg(u8 addr, u8 value)
+{
+	u8 writebuf[2] = { 0 };
+
+	writebuf[0] = addr;
+	writebuf[1] = value;
+	return fhp_write(writebuf, 2);
+}
+
+int fhp_write_command(u8 cmd)
+{
+	return fhp_write(&cmd, 1);
+}
+
 int fhp_read(u8 *cmd, u32 cmdlen, u8 *data, u32 datalen)
 {
 	return fhp_chip_read(g_fts, cmd, cmdlen, data, datalen);
+}
+
+int fhp_read_reg(u8 addr, u8 *value)
+{
+	return fhp_read(&addr, 1, value, 1);
 }
 
 #define PROC_READ_REGISTER                      1

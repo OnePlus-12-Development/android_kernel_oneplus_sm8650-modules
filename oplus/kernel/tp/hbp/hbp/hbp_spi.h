@@ -69,6 +69,7 @@ struct spi_bus {
 	int irq_need_dev_resume_time; /*control setting of wait resume time*/
 };
 
+
 extern int hw_interface_init(void);
 
 #endif
